@@ -1,0 +1,33 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: what-should-we-eat
+  datasource:
+    url: jdbc:h2:mem:fooddb
+    driver-class-name: org.h2.Driver
+    username: sa
+    password:
+  h2:
+    console:
+      enabled: true
+      path: /h2-console
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    show-sql: true
+    properties:
+      hibernate:
+        format_sql: true
+
+google:
+  places:
+    api-key: ${GOOGLE_PLACES_API_KEY:your-api-key-here}
+    nearby-search-url: https://maps.googleapis.com/maps/api/place/nearbysearch/json
+    photo-url: https://maps.googleapis.com/maps/api/place/photo
+
+app:
+  room:
+    expiry-minutes: 30
+    swipe-timeout-seconds: 30
