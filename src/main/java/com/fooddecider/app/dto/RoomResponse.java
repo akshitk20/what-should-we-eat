@@ -20,7 +20,7 @@ public class RoomResponse {
         RoomResponse response = new RoomResponse();
         response.setCode(room.getCode());
         response.setStatus(room.getStatus());
-        response.setRestaurantCount(room.getRestaurantCount());
+        response.setRestaurantCount(room.getRestaurants() != null ? room.getRestaurants().size() : 0);
         response.setMembers(
             room.getMembers().stream()
                 .map(m -> new MemberInfo(m.getId(), m.getNickname(), m.getIsHost()))

@@ -65,8 +65,10 @@ public class RoomController {
      * Compute and return the best compromise match across all members' swipes.
      */
     @PostMapping("/{code}/compromise")
-    public MatchResult getCompromise(@PathVariable String code) {
-        return roomService.getCompromise(code);
+    public ResponseEntity<MatchResult> getCompromise(@PathVariable String code) {
+        return roomService.getCompromise(code)
+                .map(ResponseEntity::ok)
+                .orElse(ResponseEntity.notFound().build());
     }
 
     /**
