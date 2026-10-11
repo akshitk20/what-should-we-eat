@@ -75,22 +75,27 @@ export default function SwipePage() {
 
   /* ---- WebSocket messages ---- */
   const handleMessage = useCallback(
-    (data) => {
-      switch (data.type) {
+    (msg) => {
+      console.log('[SwipePage] WS message:', msg);
+      const type = msg.type;
+      const data = msg.payload || msg; // payload is nested inside WebSocketMessage
+
+      switch (type) {
         case 'SWIPE_PROGRESS':
           setVoteProgress((prev) => ({
             ...prev,
             [data.restaurantId]: {
-              voted: data.votedCount,
+              voted: data.swipedCount,
               total: data.totalMembers,
             },
           }));
           break;
 
         case 'MATCH_FOUND':
+          console.log('[SwipePage] MATCH FOUND!', data);
           disconnect();
           navigate(`/room/${code}/match`, {
-            state: { match: data.restaurant },
+            state: { match: data },
           });
           break;
 

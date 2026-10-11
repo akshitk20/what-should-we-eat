@@ -4,6 +4,8 @@ import com.fooddecider.app.dto.*;
 import com.fooddecider.app.entity.*;
 import com.fooddecider.app.enums.*;
 import com.fooddecider.app.repository.*;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import java.security.SecureRandom;
@@ -11,6 +13,8 @@ import java.util.*;
 
 @Service
 public class RoomService {
+
+    private static final Logger log = LoggerFactory.getLogger(RoomService.class);
 
     private final RoomRepository roomRepository;
     private final RoomMemberRepository memberRepository;
@@ -66,7 +70,12 @@ public class RoomService {
         }
 
         Room saved = roomRepository.saveAndFlush(room);
-        return RoomResponse.fromRoom(saved);
+        RoomResponse response = RoomResponse.fromRoom(saved);
+        log.info("Room created: code={}, hostMemberId={}, restaurants={}",
+                response.getCode(),
+                response.getMembers().isEmpty() ? "NONE" : response.getMembers().get(0).getId(),
+                response.getRestaurantCount());
+        return response;
     }
 
     /**
@@ -150,8 +159,11 @@ public class RoomService {
      */
     @Transactional
     public Optional<MatchResult> recordSwipe(SwipeRequest request) {
+        log.info("Recording swipe: memberId='{}', restaurantId='{}', direction={}",
+                request.getMemberId(), request.getRestaurantId(), request.getDirection());
         RoomMember member = memberRepository.findById(request.getMemberId())
-                .orElseThrow(() -> new RuntimeException("Member not found"));
+                .orElseThrow(() -> new RuntimeException(
+                        "Member not found: '" + request.getMemberId() + "'. Did the server restart? Create a new room."));
         RoomRestaurant restaurant = restaurantRepository.findById(request.getRestaurantId())
                 .orElseThrow(() -> new RuntimeException("Restaurant not found"));
         Room room = member.getRoom();
@@ -174,7 +186,7 @@ public class RoomService {
             roomRepository.save(room);
 
             MatchResult result = new MatchResult();
-            result.setRestaurantName(restaurant.getName());
+            result.setName(restaurant.getName());
             result.setRating(restaurant.getRating());
             result.setPriceLevel(restaurant.getPriceLevel());
             result.setVicinity(restaurant.getVicinity());
@@ -190,6 +202,7 @@ public class RoomService {
     /**
      * Get swipe progress for a specific restaurant in a room.
      */
+    @Transactional(readOnly = true)
     public Map<String, Integer> getSwipeProgress(String roomCode, String restaurantId) {
         Room room = roomRepository.findById(roomCode)
                 .orElseThrow(() -> new RuntimeException("Room not found"));
@@ -199,12 +212,13 @@ public class RoomService {
     /**
      * Get best compromise when no unanimous match (fallback).
      */
+    @Transactional(readOnly = true)
     public Optional<MatchResult> getCompromise(String roomCode) {
         Room room = roomRepository.findById(roomCode)
                 .orElseThrow(() -> new RuntimeException("Room not found"));
         return matchEngine.getBestCompromise(room).map(r -> {
             MatchResult result = new MatchResult();
-            result.setRestaurantName(r.getName());
+            result.setName(r.getName());
             result.setRating(r.getRating());
             result.setPriceLevel(r.getPriceLevel());
             result.setVicinity(r.getVicinity());

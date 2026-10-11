@@ -49,14 +49,19 @@ public class PlaceService {
             log.info("  -> {} [available={}]", p.getProviderName(), p.isAvailable());
         }
 
-        // Prefer non-OSM provider if available (e.g. Google), else fallback to OSM
+        // Priority: Google > OSM > Demo
         activeProvider = providers.stream()
-                .filter(p -> p.isAvailable() && !(p instanceof OsmPlaceProvider))
+                .filter(p -> p.isAvailable()
+                        && !(p instanceof OsmPlaceProvider)
+                        && !(p instanceof DemoPlaceProvider))
                 .findFirst()
                 .orElse(providers.stream()
-                        .filter(PlaceProvider::isAvailable)
+                        .filter(p -> p.isAvailable() && !(p instanceof DemoPlaceProvider))
                         .findFirst()
-                        .orElseThrow(() -> new IllegalStateException("No place providers available!")));
+                        .orElse(providers.stream()
+                                .filter(PlaceProvider::isAvailable)
+                                .findFirst()
+                                .orElseThrow(() -> new IllegalStateException("No place providers available!"))));
 
         log.info("Active provider: {}", activeProvider.getProviderName());
         log.info("========================================");
@@ -71,12 +76,16 @@ public class PlaceService {
 
         try {
             List<RoomRestaurant> results = activeProvider.fetchNearbyRestaurants(lat, lng, radiusMeters);
-            return shuffleAndCap(results);
+            if (!results.isEmpty()) {
+                return shuffleAndCap(results);
+            }
+            log.warn("{} returned 0 results — trying fallback providers...",
+                    activeProvider.getProviderName());
         } catch (Exception e) {
             log.warn("{} failed: {} — trying fallback providers...",
                     activeProvider.getProviderName(), e.getMessage());
-            return tryFallbackProviders(lat, lng, radiusMeters);
         }
+        return tryFallbackProviders(lat, lng, radiusMeters);
     }
 
     /**

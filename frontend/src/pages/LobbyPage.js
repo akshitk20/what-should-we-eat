@@ -49,19 +49,22 @@ export default function LobbyPage() {
 
   /* ---- WebSocket connection ---- */
   const handleMessage = useCallback(
-    (data) => {
-      switch (data.type) {
+    (msg) => {
+      console.log('[Lobby] WS message:', msg);
+      const type = msg.type;
+      const data = msg.payload || msg;
+
+      switch (type) {
         case 'MEMBER_JOINED':
           setMembers((prev) => {
-            // Avoid duplicates
-            if (prev.some((m) => m.memberId === data.memberId)) return prev;
-            return [...prev, { memberId: data.memberId, nickname: data.nickname }];
+            if (prev.some((m) => m.nickname === data.nickname)) return prev;
+            return [...prev, { id: data.memberId, nickname: data.nickname, isHost: false }];
           });
           break;
 
         case 'MEMBER_LEFT':
           setMembers((prev) =>
-            prev.filter((m) => m.memberId !== data.memberId)
+            prev.filter((m) => m.id !== data.memberId)
           );
           break;
 

@@ -26,7 +26,13 @@ import java.util.stream.StreamSupport;
 public class OsmPlaceProvider implements PlaceProvider {
 
     private static final Logger log = LoggerFactory.getLogger(OsmPlaceProvider.class);
-    private static final String OVERPASS_URL = "https://overpass-api.de/api/interpreter";
+
+    // Multiple Overpass servers — if one is overloaded, try the next
+    private static final String[] OVERPASS_SERVERS = {
+        "https://overpass-api.de/api/interpreter",
+        "https://overpass.kumi.systems/api/interpreter",
+        "https://maps.mail.ru/osm/tools/overpass/api/interpreter"
+    };
 
     private final RestTemplate restTemplate = new RestTemplate();
     private final ObjectMapper objectMapper = new ObjectMapper();
@@ -59,49 +65,48 @@ public class OsmPlaceProvider implements PlaceProvider {
     public List<RoomRestaurant> fetchNearbyRestaurants(double lat, double lng, int radiusMeters) {
         log.info("[OSM] Searching: lat={}, lng={}, radius={}m", lat, lng, radiusMeters);
 
+        // Simpler, faster query — only nodes (covers 95% of restaurants in OSM)
         String query = String.format(
-            "[out:json][timeout:25];" +
-            "(" +
-            "  node[\"amenity\"=\"restaurant\"](around:%d,%f,%f);" +
-            "  way[\"amenity\"=\"restaurant\"](around:%d,%f,%f);" +
-            "  node[\"amenity\"=\"cafe\"](around:%d,%f,%f);" +
-            "  node[\"amenity\"=\"fast_food\"](around:%d,%f,%f);" +
-            ");" +
-            "out center body;",
-            radiusMeters, lat, lng,
-            radiusMeters, lat, lng,
-            radiusMeters, lat, lng,
+            "[out:json][timeout:15];" +
+            "node[\"amenity\"~\"restaurant|cafe|fast_food\"](around:%d,%f,%f);" +
+            "out body;",
             radiusMeters, lat, lng
         );
 
-        HttpHeaders headers = new HttpHeaders();
-        headers.setContentType(MediaType.APPLICATION_FORM_URLENCODED);
-        HttpEntity<String> request = new HttpEntity<>("data=" + query, headers);
+        // Try each Overpass server until one works
+        for (String server : OVERPASS_SERVERS) {
+            try {
+                log.info("[OSM] Trying server: {}", server);
+                HttpHeaders headers = new HttpHeaders();
+                headers.setContentType(MediaType.APPLICATION_FORM_URLENCODED);
+                HttpEntity<String> request = new HttpEntity<>("data=" + query, headers);
 
-        String responseBody = restTemplate.postForObject(OVERPASS_URL, request, String.class);
-        JsonNode root;
-        try {
-            root = objectMapper.readTree(responseBody);
-        } catch (Exception e) {
-            throw new RuntimeException("Failed to parse Overpass response", e);
+                String responseBody = restTemplate.postForObject(server, request, String.class);
+                JsonNode root = objectMapper.readTree(responseBody);
+                JsonNode elements = root.path("elements");
+
+                if (!elements.isArray() || elements.isEmpty()) {
+                    log.warn("[OSM] No restaurants found on {} — trying next server", server);
+                    continue;
+                }
+
+                log.info("[OSM] {} returned {} results", server, elements.size());
+
+                List<RoomRestaurant> restaurants = StreamSupport.stream(elements.spliterator(), false)
+                        .filter(node -> node.path("tags").has("name"))
+                        .map(this::mapToRestaurant)
+                        .collect(Collectors.toList());
+
+                log.info("[OSM] Mapped {} named restaurants", restaurants.size());
+                return restaurants;
+
+            } catch (Exception e) {
+                log.warn("[OSM] Server {} failed: {} — trying next", server, e.getMessage());
+            }
         }
 
-        JsonNode elements = root.path("elements");
-
-        if (!elements.isArray() || elements.isEmpty()) {
-            log.warn("[OSM] No restaurants found near ({}, {}) within {}m", lat, lng, radiusMeters);
-            return Collections.emptyList();
-        }
-
-        log.info("[OSM] Overpass returned {} results", elements.size());
-
-        List<RoomRestaurant> restaurants = StreamSupport.stream(elements.spliterator(), false)
-                .filter(node -> node.path("tags").has("name")) // skip unnamed
-                .map(this::mapToRestaurant)
-                .collect(Collectors.toList());
-
-        log.info("[OSM] Mapped {} named restaurants", restaurants.size());
-        return restaurants;
+        log.error("[OSM] All Overpass servers failed");
+        return Collections.emptyList();
     }
 
     @Override

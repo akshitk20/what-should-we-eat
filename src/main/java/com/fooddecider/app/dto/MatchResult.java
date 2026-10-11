@@ -2,7 +2,7 @@ package com.fooddecider.app.dto;
 
 public class MatchResult {
 
-    private String restaurantName;
+    private String name;
     private Double rating;
     private Integer priceLevel;
     private String vicinity;
@@ -14,8 +14,8 @@ public class MatchResult {
 
     // --- Getters ---
 
-    public String getRestaurantName() {
-        return restaurantName;
+    public String getName() {
+        return name;
     }
 
     public Double getRating() {
@@ -44,8 +44,8 @@ public class MatchResult {
 
     // --- Setters ---
 
-    public void setRestaurantName(String restaurantName) {
-        this.restaurantName = restaurantName;
+    public void setName(String name) {
+        this.name = name;
     }
 
     public void setRating(Double rating) {
