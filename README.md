@@ -180,9 +180,3 @@ what-should-we-eat/
 - [ ] Push notifications when it's your turn to swipe
 - [ ] Photo battle mode — AI-generated restaurant descriptions
 - [ ] Deploy to BTP Cloud Foundry with PostgreSQL
-
----
-
-## License
-
-[MIT](LICENSE)
