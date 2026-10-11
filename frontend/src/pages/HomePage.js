@@ -51,7 +51,7 @@ export default function HomePage() {
     try {
       const { latitude, longitude } = await getCoords();
       const data = await createRoom({
-        nickname: createNickname.trim(),
+        hostNickname: createNickname.trim(),
         latitude,
         longitude,
       });

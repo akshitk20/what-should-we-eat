@@ -1,10 +1,55 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import TinderCard from 'react-tinder-card';
+import { motion, useMotionValue, useTransform, AnimatePresence } from 'framer-motion';
 import { getRoom } from '../services/api';
 import { connectToRoom, sendSwipe, disconnect } from '../services/websocket';
 import RestaurantCard from '../components/RestaurantCard';
 
+/* ------------------------------------------------------------------ */
+/*  Draggable card wrapper — replaces react-tinder-card               */
+/* ------------------------------------------------------------------ */
+function SwipeableCard({ restaurant, onSwipe, style }) {
+  const x = useMotionValue(0);
+  const rotate = useTransform(x, [-200, 200], [-18, 18]);
+  const yesOpacity = useTransform(x, [0, 100], [0, 1]);
+  const nopeOpacity = useTransform(x, [-100, 0], [1, 0]);
+
+  const handleDragEnd = (_, info) => {
+    const threshold = 100;
+    if (info.offset.x > threshold) {
+      onSwipe('right', restaurant);
+    } else if (info.offset.x < -threshold) {
+      onSwipe('left', restaurant);
+    }
+  };
+
+  return (
+    <motion.div
+      className="swipeable-card-wrapper"
+      style={{ x, rotate, ...style }}
+      drag="x"
+      dragConstraints={{ left: 0, right: 0 }}
+      dragElastic={0.9}
+      onDragEnd={handleDragEnd}
+      exit={{ x: 300, opacity: 0, transition: { duration: 0.3 } }}
+    >
+      {/* YUM overlay */}
+      <motion.div className="swipe-overlay-yes" style={{ opacity: yesOpacity }}>
+        YUM! 😍
+      </motion.div>
+      {/* NOPE overlay */}
+      <motion.div className="swipe-overlay-no" style={{ opacity: nopeOpacity }}>
+        NOPE 🙅
+      </motion.div>
+
+      <RestaurantCard restaurant={restaurant} />
+    </motion.div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/*  Main SwipePage                                                     */
+/* ------------------------------------------------------------------ */
 export default function SwipePage() {
   const { code }  = useParams();
   const navigate  = useNavigate();
@@ -13,13 +58,9 @@ export default function SwipePage() {
 
   const [restaurants, setRestaurants]     = useState([]);
   const [currentIndex, setCurrentIndex]   = useState(0);
-  const [voteProgress, setVoteProgress]   = useState({});  // { restaurantId: { voted, total } }
+  const [voteProgress, setVoteProgress]   = useState({});
   const [allSwiped, setAllSwiped]         = useState(false);
-  const [swipeHint, setSwipeHint]         = useState(null); // 'left' | 'right' | null
   const [loading, setLoading]             = useState(true);
-
-  // Refs for programmatic swipe (one per card)
-  const cardRefs = useRef([]);
 
   /* ---- Load restaurants for this room ---- */
   useEffect(() => {
@@ -27,7 +68,6 @@ export default function SwipePage() {
       .then((room) => {
         const list = room?.restaurants || [];
         setRestaurants(list);
-        cardRefs.current = list.map(() => React.createRef());
         setCurrentIndex(0);
       })
       .catch(console.error)
@@ -63,11 +103,11 @@ export default function SwipePage() {
   );
 
   useEffect(() => {
-    const client = connectToRoom(code, handleMessage);
+    connectToRoom(code, handleMessage);
     return () => disconnect();
   }, [code, handleMessage]);
 
-  /* ---- Handle swipe (from card drag or button) ---- */
+  /* ---- Handle swipe ---- */
   const handleSwipe = useCallback(
     (direction, restaurant) => {
       const vote = direction === 'right' ? 'RIGHT' : 'LEFT';
@@ -77,10 +117,6 @@ export default function SwipePage() {
         restaurantId: restaurant.id || restaurant.placeId,
         direction: vote,
       });
-
-      // Show colour flash then clear
-      setSwipeHint(direction);
-      setTimeout(() => setSwipeHint(null), 600);
 
       setCurrentIndex((prev) => {
         const next = prev + 1;
@@ -93,13 +129,10 @@ export default function SwipePage() {
     [code, memberId, restaurants.length]
   );
 
-  /* ---- Programmatic swipe via buttons ---- */
-  const swipeCard = async (dir) => {
-    const idx = currentIndex;
-    if (idx >= restaurants.length) return;
-    if (cardRefs.current[idx]?.current) {
-      await cardRefs.current[idx].current.swipe(dir);
-    }
+  /* ---- Button swipe helpers ---- */
+  const swipeViaButton = (dir) => {
+    if (currentIndex >= restaurants.length) return;
+    handleSwipe(dir, restaurants[currentIndex]);
   };
 
   /* ---- Render states ---- */
@@ -155,49 +188,38 @@ export default function SwipePage() {
           <>
             {/* Card stack */}
             <div className="card-stack">
-              {/* Swipe direction hints */}
-              {swipeHint === 'right' && (
-                <div className="swipe-overlay-yes" style={{ opacity: 1 }}>
-                  YUM! 😍
-                </div>
-              )}
-              {swipeHint === 'left' && (
-                <div className="swipe-overlay-no" style={{ opacity: 1 }}>
-                  NOPE 🙅
-                </div>
-              )}
-
-              {/* Render remaining cards in reverse so top card is last in DOM */}
-              {restaurants
-                .slice(currentIndex, currentIndex + 3)
-                .map((restaurant, stackIdx) => {
-                  const absIdx = currentIndex + stackIdx;
-                  return (
-                    <TinderCard
-                      key={restaurant.id || restaurant.placeId || absIdx}
-                      ref={cardRefs.current[absIdx]}
-                      onSwipe={(dir) => {
-                        if (stackIdx === 0) handleSwipe(dir, restaurant);
-                      }}
-                      onCardLeftScreen={() => {}}
-                      preventSwipe={stackIdx !== 0 ? ['left', 'right', 'up', 'down'] : ['up', 'down']}
-                      swipeRequirementType="position"
-                      swipeThreshold={80}
-                    >
-                      <RestaurantCard
+              <AnimatePresence>
+                {restaurants
+                  .slice(currentIndex, currentIndex + 3)
+                  .reverse()
+                  .map((restaurant, reversedIdx) => {
+                    const stackIdx = (Math.min(3, restaurants.length - currentIndex) - 1) - reversedIdx;
+                    return stackIdx === 0 ? (
+                      <SwipeableCard
+                        key={restaurant.id || restaurant.placeId}
                         restaurant={restaurant}
+                        onSwipe={handleSwipe}
                         style={{
-                          // Stack visual effect
-                          transform: stackIdx === 0
-                            ? 'none'
-                            : `scale(${1 - stackIdx * 0.04}) translateY(${stackIdx * 14}px)`,
-                          zIndex: 10 - stackIdx,
-                          pointerEvents: stackIdx === 0 ? 'auto' : 'none',
+                          position: 'absolute',
+                          zIndex: 10,
                         }}
                       />
-                    </TinderCard>
-                  );
-                })}
+                    ) : (
+                      <motion.div
+                        key={restaurant.id || restaurant.placeId}
+                        className="swipeable-card-wrapper"
+                        style={{
+                          position: 'absolute',
+                          transform: `scale(${1 - stackIdx * 0.04}) translateY(${stackIdx * 14}px)`,
+                          zIndex: 10 - stackIdx,
+                          pointerEvents: 'none',
+                        }}
+                      >
+                        <RestaurantCard restaurant={restaurant} />
+                      </motion.div>
+                    );
+                  })}
+              </AnimatePresence>
             </div>
 
             {/* Peer vote progress */}
@@ -211,7 +233,7 @@ export default function SwipePage() {
             <div className="swipe-buttons">
               <button
                 className="swipe-btn-nope"
-                onClick={() => swipeCard('left')}
+                onClick={() => swipeViaButton('left')}
                 aria-label="Nope"
                 title="NOPE"
               >
@@ -226,7 +248,7 @@ export default function SwipePage() {
 
               <button
                 className="swipe-btn-yum"
-                onClick={() => swipeCard('right')}
+                onClick={() => swipeViaButton('right')}
                 aria-label="Yum"
                 title="YUM!"
               >
