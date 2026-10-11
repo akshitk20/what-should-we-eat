@@ -60,13 +60,13 @@ public class RoomService {
         // Fetch nearby restaurants
         List<RoomRestaurant> restaurants = placeService.fetchNearbyRestaurants(
                 request.getLatitude(), request.getLongitude(), room.getRadiusMeters());
-        restaurants.forEach(r -> {
+        for (RoomRestaurant r : restaurants) {
             r.setRoom(room);
             room.getRestaurants().add(r);
-        });
+        }
 
-        roomRepository.save(room);
-        return RoomResponse.fromRoom(room);
+        Room saved = roomRepository.saveAndFlush(room);
+        return RoomResponse.fromRoom(saved);
     }
 
     /**
@@ -91,7 +91,7 @@ public class RoomService {
         member.setRoom(room);
         room.getMembers().add(member);
 
-        roomRepository.save(room);
+        room = roomRepository.saveAndFlush(room);
         return RoomResponse.fromRoom(room);
     }
 
@@ -102,6 +102,18 @@ public class RoomService {
         Room room = roomRepository.findById(roomCode)
                 .orElseThrow(() -> new RuntimeException("Room not found: " + roomCode));
         return RoomResponse.fromRoom(room);
+    }
+
+    /**
+     * Get restaurant cards for a room.
+     */
+    public List<RestaurantCard> getRestaurants(String roomCode) {
+        Room room = roomRepository.findById(roomCode)
+                .orElseThrow(() -> new RuntimeException("Room not found: " + roomCode));
+        return room.getRestaurants().stream()
+                .sorted(java.util.Comparator.comparingInt(RoomRestaurant::getSwipeOrder))
+                .map(RestaurantCard::fromEntity)
+                .toList();
     }
 
     /**
@@ -222,7 +234,7 @@ public class RoomService {
         SecureRandom random = new SecureRandom();
         String code;
         do {
-            code = "FOOD-" + String.format("%04d", random.nextInt(10000));
+            code = "FOOD-" + (1000 + random.nextInt(9000));
         } while (roomRepository.existsById(code));
         return code;
     }

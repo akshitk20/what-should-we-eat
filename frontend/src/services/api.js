@@ -43,6 +43,15 @@ export const joinRoom = async (code, data) => {
 };
 
 /**
+ * Fetches the restaurant cards for a room.
+ */
+export const getRestaurants = async (code) => {
+  const res = await window.fetch(`${API_BASE}/${code}/restaurants`);
+  if (!res.ok) throw new Error(`Failed to fetch restaurants: ${res.status}`);
+  return res.json();
+};
+
+/**
  * Starts the swiping phase (host only).
  * @param {string} code
  * @param {string} memberId

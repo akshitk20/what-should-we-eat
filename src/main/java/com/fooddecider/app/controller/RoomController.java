@@ -61,6 +61,15 @@ public class RoomController {
     }
 
     /**
+     * GET /api/rooms/{code}/restaurants
+     * Returns the list of restaurant cards for swiping.
+     */
+    @GetMapping("/{code}/restaurants")
+    public List<RestaurantCard> getRestaurants(@PathVariable String code) {
+        return roomService.getRestaurants(code);
+    }
+
+    /**
      * POST /api/rooms/{code}/compromise
      * Compute and return the best compromise match across all members' swipes.
      */

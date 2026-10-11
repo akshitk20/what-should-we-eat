@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion, useMotionValue, useTransform, AnimatePresence } from 'framer-motion';
-import { getRoom } from '../services/api';
+import { getRestaurants } from '../services/api';
 import { connectToRoom, sendSwipe, disconnect } from '../services/websocket';
 import RestaurantCard from '../components/RestaurantCard';
 
@@ -64,10 +64,9 @@ export default function SwipePage() {
 
   /* ---- Load restaurants for this room ---- */
   useEffect(() => {
-    getRoom(code)
-      .then((room) => {
-        const list = room?.restaurants || [];
-        setRestaurants(list);
+    getRestaurants(code)
+      .then((list) => {
+        setRestaurants(list || []);
         setCurrentIndex(0);
       })
       .catch(console.error)

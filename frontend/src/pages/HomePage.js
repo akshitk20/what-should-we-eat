@@ -55,14 +55,15 @@ export default function HomePage() {
         latitude,
         longitude,
       });
-      sessionStorage.setItem('memberId', data.memberId);
+      const host = data.members?.find((m) => m.isHost) || data.members?.[0];
+      sessionStorage.setItem('memberId', host?.id || '');
       sessionStorage.setItem('nickname', createNickname.trim());
       sessionStorage.setItem('isHost', 'true');
       sessionStorage.setItem(
         'avatarColor',
         AVATAR_COLORS[Math.floor(Math.random() * AVATAR_COLORS.length)]
       );
-      navigate(`/room/${data.roomCode}`);
+      navigate(`/room/${data.code}`);
     } catch (err) {
       setCreateError('Could not create room. Is the server running?');
     } finally {
@@ -206,7 +207,7 @@ export default function HomePage() {
                 className="input"
                 type="text"
                 placeholder="e.g. ABC123"
-                maxLength={8}
+                maxLength={10}
                 value={joinCode}
                 onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
                 onKeyDown={(e) => handleKeyDown(e, handleJoin)}
